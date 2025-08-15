@@ -237,7 +237,7 @@ class ExtensionApp {
     authButton.disabled = true;
     authButton.innerHTML = `
       <div class="spinner-small"></div>
-      Validating token...
+      Validating...
     `;
     errorDiv.classList.add('hidden');
     
@@ -272,11 +272,10 @@ class ExtensionApp {
       authButton.disabled = false;
       authButton.innerHTML = `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 12l2 2 4-4"/>
-          <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-          <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-        </svg>
-        Authenticate with Token
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+        Authenticate
       `;
     }
   }
