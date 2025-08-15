@@ -80,7 +80,39 @@ class GitHubService {
     }
   }
 
-  async uploadFiles(repository, files, commitInfo, onProgress) {
+  async getBranchDetails(owner, repo, branch) {
+    try {
+      const branchData = await this.makeRequest(`/repos/${owner}/${repo}/branches/${branch}`);
+      return branchData;
+    } catch (error) {
+      console.error('Failed to fetch branch details:', error);
+      throw new Error(`Failed to fetch branch details: ${error.message}`);
+    }
+  }
+
+  async getTree(owner, repo, sha, recursive = true) {
+    try {
+      const tree = await this.makeRequest(`/repos/${owner}/${repo}/git/trees/${sha}${recursive ? '?recursive=1' : ''}`);
+      return tree;
+    } catch (error) {
+      console.error('Failed to fetch tree:', error);
+      throw new Error(`Failed to fetch tree: ${error.message}`);
+    }
+  }
+
+  async getBlobContent(owner, repo, sha) {
+    try {
+      const blob = await this.makeRequest(`/repos/${owner}/${repo}/git/blobs/${sha}`);
+      // Decode base64 content
+      const content = blob.encoding === 'base64' ? atob(blob.content) : blob.content;
+      return content;
+    } catch (error) {
+      console.error('Failed to fetch blob content:', error);
+      throw new Error(`Failed to fetch blob content: ${error.message}`);
+    }
+  }
+
+  async uploadFiles(repository, files, commitInfo, filesToDeletePaths = [], onProgress) {
     try {
       const owner = repository.owner.login;
       const repo = repository.name;
@@ -106,15 +138,58 @@ class GitHubService {
 
       onProgress?.(40);
 
-      // Create tree entries
-      const treeEntries = files
-        .filter(file => !file.isDirectory)
-        .map(file => ({
-          path: file.path,
-          mode: '100644',
-          type: 'blob',
-          content: typeof file.content === 'string' ? file.content : btoa(String.fromCharCode(...file.content))
-        }));
+      let treeEntries = [];
+
+      if (commitInfo.clearExisting) {
+        // If clearing existing, only include new files
+        treeEntries = files
+          .filter(file => !file.isDirectory)
+          .map(file => ({
+            path: file.path,
+            mode: '100644',
+            type: 'blob',
+            content: typeof file.content === 'string' ? file.content : btoa(String.fromCharCode(...file.content))
+          }));
+      } else {
+        // Get existing tree to preserve files not being deleted
+        const existingTree = await this.makeRequest(`/repos/${owner}/${repo}/git/trees/${currentCommit.tree.sha}?recursive=1`);
+        
+        // Start with existing files, excluding those marked for deletion
+        const preservedFiles = existingTree.tree
+          .filter(item => item.type === 'blob')
+          .filter(item => !filesToDeletePaths.includes(item.path))
+          .map(item => ({
+            path: item.path,
+            mode: item.mode,
+            type: item.type,
+            sha: item.sha
+          }));
+
+        // Add new/modified files
+        const newFiles = files
+          .filter(file => !file.isDirectory)
+          .map(file => ({
+            path: file.path,
+            mode: '100644',
+            type: 'blob',
+            content: typeof file.content === 'string' ? file.content : btoa(String.fromCharCode(...file.content))
+          }));
+
+        // Combine preserved and new files, with new files taking precedence
+        const fileMap = new Map();
+        
+        // Add preserved files first
+        preservedFiles.forEach(file => {
+          fileMap.set(file.path, file);
+        });
+        
+        // Add/overwrite with new files
+        newFiles.forEach(file => {
+          fileMap.set(file.path, file);
+        });
+        
+        treeEntries = Array.from(fileMap.values());
+      }
 
       // Create new tree
       const newTree = await this.makeRequest(`/repos/${owner}/${repo}/git/trees`, {
@@ -123,8 +198,7 @@ class GitHubService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          tree: treeEntries,
-          base_tree: commitInfo.clearExisting ? undefined : currentCommit.tree.sha
+          tree: treeEntries
         })
       });
 
@@ -341,6 +415,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       return true;
 
+    case 'getBranchDetails':
+      if (!request.token || !request.owner || !request.repo || !request.branch) {
+        sendResponse({ success: false, error: 'Missing required parameters' });
+        return;
+      }
+
+      const branchDetailsService = new GitHubService(request.token);
+      branchDetailsService.getBranchDetails(request.owner, request.repo, request.branch)
+        .then(branchDetails => {
+          sendResponse({ success: true, branchDetails });
+        })
+        .catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case 'getTree':
+      if (!request.token || !request.owner || !request.repo || !request.sha) {
+        sendResponse({ success: false, error: 'Missing required parameters' });
+        return;
+      }
+
+      const treeService = new GitHubService(request.token);
+      treeService.getTree(request.owner, request.repo, request.sha, request.recursive)
+        .then(tree => {
+          sendResponse({ success: true, tree });
+        })
+        .catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case 'getBlobContent':
+      if (!request.token || !request.owner || !request.repo || !request.sha) {
+        sendResponse({ success: false, error: 'Missing required parameters' });
+        return;
+      }
+
+      const blobService = new GitHubService(request.token);
+      blobService.getBlobContent(request.owner, request.repo, request.sha)
+        .then(content => {
+          sendResponse({ success: true, content });
+        })
+        .catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
     case 'uploadFiles':
       if (!request.token || !request.repository || !request.files || !request.commitInfo) {
         sendResponse({ success: false, error: 'Missing required parameters' });
@@ -352,6 +474,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         request.repository,
         request.files,
         request.commitInfo,
+        request.filesToDeletePaths || [],
         (progress) => {
           // Send progress updates
           chrome.runtime.sendMessage({

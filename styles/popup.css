@@ -639,6 +639,133 @@ body {
   color: #dc2626;
 }
 
+/* File Changes Summary */
+.file-changes-summary {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.file-changes-summary h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #111827;
+}
+
+.file-changes-container {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.loading-changes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  color: #6b7280;
+}
+
+.file-change-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.file-change-item:hover {
+  background: #f9fafb;
+}
+
+.file-change-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.file-status-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.file-path {
+  flex: 1;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+/* File Status Colors */
+.status-new {
+  color: #16a34a;
+}
+
+.status-new .file-status {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-modified {
+  color: #d97706;
+}
+
+.status-modified .file-status {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-deleted {
+  color: #dc2626;
+}
+
+.status-deleted .file-status {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.status-unchanged {
+  color: #6b7280;
+}
+
+.status-unchanged .file-status {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.file-changes-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.file-changes-stats span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Upload Progress */
 .upload-progress {
   background: #f9fafb;

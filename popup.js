@@ -546,6 +546,15 @@ class ExtensionApp {
   }
 
   async showCommitScreen() {
+    // Show loading state for file changes
+    const fileChangesList = document.getElementById('file-changes-list');
+    fileChangesList.innerHTML = `
+      <div class="loading-changes">
+        <div class="spinner"></div>
+        <p>Analyzing file changes...</p>
+      </div>
+    `;
+
     // Set up repository info
     const repoInfo = document.getElementById('repo-info');
     repoInfo.innerHTML = `
@@ -565,6 +574,282 @@ class ExtensionApp {
     
     // Load branches
     await this.loadBranches();
+    
+    // Analyze file changes
+    await this.analyzeFileChanges();
+  }
+
+  async analyzeFileChanges() {
+    try {
+      const selectedBranch = document.getElementById('branch-select').value || this.selectedRepository.default_branch;
+      
+      // Get branch details
+      const branchResponse = await this.sendMessage({
+        action: 'getBranchDetails',
+        token: this.githubToken,
+        owner: this.selectedRepository.owner.login,
+        repo: this.selectedRepository.name,
+        branch: selectedBranch
+      });
+      
+      if (!branchResponse.success) {
+        throw new Error(branchResponse.error);
+      }
+      
+      // Get existing file tree
+      const treeResponse = await this.sendMessage({
+        action: 'getTree',
+        token: this.githubToken,
+        owner: this.selectedRepository.owner.login,
+        repo: this.selectedRepository.name,
+        sha: branchResponse.branchDetails.commit.sha,
+        recursive: true
+      });
+      
+      if (!treeResponse.success) {
+        throw new Error(treeResponse.error);
+      }
+      
+      // Compare files
+      await this.compareFiles(treeResponse.tree.tree);
+      
+    } catch (error) {
+      console.error('Error analyzing file changes:', error);
+      const fileChangesList = document.getElementById('file-changes-list');
+      fileChangesList.innerHTML = `
+        <div class="error-state">
+          <p>Failed to analyze file changes: ${error.message}</p>
+          <p>You can still proceed with the upload.</p>
+        </div>
+      `;
+    }
+  }
+
+  async compareFiles(existingTree) {
+    const existingFiles = new Map();
+    const uploadedFiles = new Map();
+    
+    // Map existing files (only blobs, not trees)
+    existingTree
+      .filter(item => item.type === 'blob')
+      .forEach(item => {
+        existingFiles.set(item.path, item);
+      });
+    
+    // Map uploaded files
+    this.uploadedFile.extractedFiles.forEach(file => {
+      uploadedFiles.set(file.path, file);
+    });
+    
+    const changes = {
+      new: [],
+      modified: [],
+      deleted: [],
+      unchanged: []
+    };
+    
+    // Check uploaded files against existing
+    for (const [path, uploadedFile] of uploadedFiles) {
+      if (!existingFiles.has(path)) {
+        // New file
+        changes.new.push({ path, file: uploadedFile, status: 'new' });
+      } else {
+        // File exists, check if modified
+        const existingFile = existingFiles.get(path);
+        try {
+          const existingContentResponse = await this.sendMessage({
+            action: 'getBlobContent',
+            token: this.githubToken,
+            owner: this.selectedRepository.owner.login,
+            repo: this.selectedRepository.name,
+            sha: existingFile.sha
+          });
+          
+          if (existingContentResponse.success) {
+            const existingContent = existingContentResponse.content;
+            const uploadedContent = typeof uploadedFile.content === 'string' 
+              ? uploadedFile.content 
+              : new TextDecoder().decode(uploadedFile.content);
+            
+            if (existingContent === uploadedContent) {
+              changes.unchanged.push({ path, file: uploadedFile, status: 'unchanged' });
+            } else {
+              changes.modified.push({ path, file: uploadedFile, status: 'modified' });
+            }
+          } else {
+            // If we can't fetch content, assume modified
+            changes.modified.push({ path, file: uploadedFile, status: 'modified' });
+          }
+        } catch (error) {
+          console.error(`Error comparing file ${path}:`, error);
+          // If comparison fails, assume modified
+          changes.modified.push({ path, file: uploadedFile, status: 'modified' });
+        }
+      }
+    }
+    
+    // Check for deleted files
+    for (const [path, existingFile] of existingFiles) {
+      if (!uploadedFiles.has(path)) {
+        changes.deleted.push({ path, file: existingFile, status: 'deleted' });
+      }
+    }
+    
+    this.fileChangesSummary = changes;
+    
+    // Initialize selected files (all new, modified, and unchanged selected by default)
+    this.filesToPush = [
+      ...changes.new.map(item => item.file),
+      ...changes.modified.map(item => item.file),
+      ...changes.unchanged.map(item => item.file)
+    ];
+    
+    // Initialize files to delete (none selected by default)
+    this.filesToDelete = [];
+    
+    this.renderFileChangesSummary();
+  }
+
+  renderFileChangesSummary() {
+    const fileChangesList = document.getElementById('file-changes-list');
+    const changes = this.fileChangesSummary;
+    
+    const totalChanges = changes.new.length + changes.modified.length + changes.deleted.length;
+    
+    if (totalChanges === 0 && changes.unchanged.length === 0) {
+      fileChangesList.innerHTML = `
+        <div class="empty-state">
+          <p>No files to compare</p>
+        </div>
+      `;
+      return;
+    }
+    
+    const stats = `
+      <div class="file-changes-stats">
+        <span class="status-new">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14"/>
+            <path d="M5 12h14"/>
+          </svg>
+          ${changes.new.length} new
+        </span>
+        <span class="status-modified">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+          </svg>
+          ${changes.modified.length} modified
+        </span>
+        <span class="status-deleted">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+          ${changes.deleted.length} deleted
+        </span>
+        <span class="status-unchanged">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          ${changes.unchanged.length} unchanged
+        </span>
+      </div>
+    `;
+    
+    const allChanges = [
+      ...changes.new,
+      ...changes.modified,
+      ...changes.deleted,
+      ...changes.unchanged
+    ].sort((a, b) => a.path.localeCompare(b.path));
+    
+    const fileItems = allChanges.map(item => {
+      const isSelected = this.isFileSelected(item);
+      const icon = this.getStatusIcon(item.status);
+      
+      return `
+        <div class="file-change-item status-${item.status}">
+          <input type="checkbox" 
+                 ${isSelected ? 'checked' : ''} 
+                 data-path="${item.path}" 
+                 data-status="${item.status}"
+                 onchange="app.handleFileSelectionChange(this)">
+          <div class="file-status-icon">${icon}</div>
+          <span class="file-path" title="${item.path}">${item.path}</span>
+          <span class="file-status">${item.status}</span>
+        </div>
+      `;
+    }).join('');
+    
+    fileChangesList.innerHTML = stats + fileItems;
+  }
+
+  getStatusIcon(status) {
+    switch (status) {
+      case 'new':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14"/>
+          <path d="M5 12h14"/>
+        </svg>`;
+      case 'modified':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+        </svg>`;
+      case 'deleted':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>`;
+      case 'unchanged':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>`;
+      default:
+        return '';
+    }
+  }
+
+  isFileSelected(item) {
+    if (item.status === 'deleted') {
+      return this.filesToDelete.includes(item.path);
+    } else {
+      return this.filesToPush.some(file => file.path === item.path);
+    }
+  }
+
+  handleFileSelectionChange(checkbox) {
+    const path = checkbox.dataset.path;
+    const status = checkbox.dataset.status;
+    const isChecked = checkbox.checked;
+    
+    if (status === 'deleted') {
+      if (isChecked) {
+        if (!this.filesToDelete.includes(path)) {
+          this.filesToDelete.push(path);
+        }
+      } else {
+        this.filesToDelete = this.filesToDelete.filter(p => p !== path);
+      }
+    } else {
+      if (isChecked) {
+        // Find the file in the changes and add to filesToPush
+        const allFiles = [
+          ...this.fileChangesSummary.new,
+          ...this.fileChangesSummary.modified,
+          ...this.fileChangesSummary.unchanged
+        ];
+        const fileItem = allFiles.find(item => item.path === path);
+        if (fileItem && !this.filesToPush.some(file => file.path === path)) {
+          this.filesToPush.push(fileItem.file);
+        }
+      } else {
+        this.filesToPush = this.filesToPush.filter(file => file.path !== path);
+      }
+    }
   }
 
   async loadBranches() {
@@ -630,7 +915,8 @@ class ExtensionApp {
         action: 'uploadFiles',
         token: this.githubToken,
         repository: this.selectedRepository,
-        files: this.uploadedFile.extractedFiles,
+        files: this.filesToPush,
+        filesToDeletePaths: this.filesToDelete,
         commitInfo: {
           message: commitMessage,
           branch: selectedBranch,
@@ -662,6 +948,9 @@ class ExtensionApp {
     this.selectedRepository = null;
     this.uploadedFile = null;
     this.extractedFiles = [];
+    this.fileChangesSummary = null;
+    this.filesToPush = [];
+    this.filesToDelete = [];
     this.showScreen('repo');
   }
 
