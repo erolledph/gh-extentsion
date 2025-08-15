@@ -725,39 +725,6 @@ class ExtensionApp {
       return;
     }
     
-    const stats = `
-      <div class="file-changes-stats">
-        <span class="status-new">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14"/>
-            <path d="M5 12h14"/>
-          </svg>
-          <strong>${changes.new.length}</strong> new
-        </span>
-        <span class="status-modified">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-          </svg>
-          <strong>${changes.modified.length}</strong> modified
-        </span>
-        <span class="status-deleted">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18"/>
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>
-          <strong>${changes.deleted.length}</strong> deleted
-        </span>
-        <span class="status-unchanged">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 6L9 17l-5-5"/>
-          </svg>
-          <strong>${changes.unchanged.length}</strong> unchanged
-        </span>
-      </div>
-    `;
-    
     const categories = [
       { key: 'new', label: 'New files', items: changes.new },
       { key: 'modified', label: 'Modified files', items: changes.modified },
@@ -767,7 +734,7 @@ class ExtensionApp {
     
     const categorizedContent = categories.map(category => this.renderCategory(category)).join('');
     
-    fileChangesList.innerHTML = stats + categorizedContent;
+    fileChangesList.innerHTML = categorizedContent;
     
     // Attach event listeners after DOM elements are created
     this.attachFileChangeListeners();
