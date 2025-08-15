@@ -320,7 +320,7 @@ label {
   text-align: center;
   flex: 1;
   justify-content: center;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .auth-icon {
@@ -378,7 +378,7 @@ label {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-5);
+  padding: var(--space-6);
   box-shadow: var(--shadow-sm);
 }
 
@@ -411,8 +411,12 @@ label {
   text-decoration: underline;
 }
 
+.manual-token-section .form-group {
+  margin-bottom: var(--space-5);
+}
+
 .manual-token-section .btn-secondary {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 /* Repository Screen */
@@ -559,6 +563,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  padding-bottom: var(--space-6);
 }
 
 .repo-item {
