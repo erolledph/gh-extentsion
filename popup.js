@@ -705,7 +705,7 @@ class ExtensionApp {
     ];
     
     // Initialize files to delete (none selected by default)
-    this.filesToDelete = [];
+    this.filesToDelete = changes.deleted.map(item => item.path);
     
     this.renderFileChangesSummary();
   }
@@ -732,14 +732,14 @@ class ExtensionApp {
             <path d="M12 5v14"/>
             <path d="M5 12h14"/>
           </svg>
-          ${changes.new.length} new
+          <strong>${changes.new.length}</strong> new
         </span>
         <span class="status-modified">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
           </svg>
-          ${changes.modified.length} modified
+          <strong>${changes.modified.length}</strong> modified
         </span>
         <span class="status-deleted">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -747,27 +747,44 @@ class ExtensionApp {
             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
           </svg>
-          ${changes.deleted.length} deleted
+          <strong>${changes.deleted.length}</strong> deleted
         </span>
         <span class="status-unchanged">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 6L9 17l-5-5"/>
           </svg>
-          ${changes.unchanged.length} unchanged
+          <strong>${changes.unchanged.length}</strong> unchanged
         </span>
       </div>
     `;
     
-    const allChanges = [
-      ...changes.new,
-      ...changes.modified,
-      ...changes.deleted,
-      ...changes.unchanged
-    ].sort((a, b) => a.path.localeCompare(b.path));
+    const categories = [
+      { key: 'new', label: 'New files', items: changes.new },
+      { key: 'modified', label: 'Modified files', items: changes.modified },
+      { key: 'deleted', label: 'Deleted files', items: changes.deleted },
+      { key: 'unchanged', label: 'Unchanged files', items: changes.unchanged }
+    ].filter(category => category.items.length > 0);
     
-    const fileItems = allChanges.map(item => {
+    const categorizedContent = categories.map(category => this.renderCategory(category)).join('');
+    
+    fileChangesList.innerHTML = stats + categorizedContent;
+  }
+
+  renderCategory(category) {
+    const { key, label, items, icon } = category;
+    const sortedItems = items.sort((a, b) => a.path.localeCompare(b.path));
+    
+    // Check if all items in this category are selected
+    const allSelected = sortedItems.every(item => this.isFileSelected(item));
+    const someSelected = sortedItems.some(item => this.isFileSelected(item));
+    
+    const toggleIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 18l6-6-6-6"/>
+    </svg>`;
+    
+    const fileItems = sortedItems.map(item => {
       const isSelected = this.isFileSelected(item);
-      const icon = this.getStatusIcon(item.status);
+      const statusIcon = this.getStatusIcon(item.status);
       
       return `
         <div class="file-change-item status-${item.status}">
@@ -776,14 +793,60 @@ class ExtensionApp {
                  data-path="${item.path}" 
                  data-status="${item.status}"
                  onchange="app.handleFileSelectionChange(this)">
-          <div class="file-status-icon">${icon}</div>
+          <div class="file-status-icon">${statusIcon}</div>
           <span class="file-path" title="${item.path}">${item.path}</span>
           <span class="file-status">${item.status}</span>
         </div>
       `;
     }).join('');
     
-    fileChangesList.innerHTML = stats + fileItems;
+    return `
+      <div class="file-category-section">
+        <div class="file-category-header" onclick="app.toggleCategory('${key}')">
+          <label class="category-checkbox-label">
+            <input type="checkbox" 
+                   class="category-checkbox"
+                   data-category="${key}"
+                   ${allSelected ? 'checked' : ''}
+                   ${someSelected && !allSelected ? 'data-indeterminate="true"' : ''}
+                   onchange="app.handleCategorySelectionChange(this)"
+                   onclick="event.stopPropagation()">
+            <span class="category-toggle-icon">${toggleIcon}</span>
+            <span class="category-title">${items.length} ${label}</span>
+          </label>
+        </div>
+        <div class="file-category-items">
+          ${fileItems}
+        </div>
+      </div>
+    `;
+  }
+
+  getCategoryIcon(iconType) {
+    switch (iconType) {
+      case 'plus':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14"/>
+          <path d="M5 12h14"/>
+        </svg>`;
+      case 'edit':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+        </svg>`;
+      case 'trash':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>`;
+      case 'check':
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>`;
+      default:
+        return '';
+    }
   }
 
   getStatusIcon(status) {
@@ -849,6 +912,65 @@ class ExtensionApp {
       } else {
         this.filesToPush = this.filesToPush.filter(file => file.path !== path);
       }
+    }
+    
+    // Update the category checkbox state
+    this.updateCategoryCheckboxState(status);
+  }
+
+  handleCategorySelectionChange(checkbox) {
+    const category = checkbox.dataset.category;
+    const isChecked = checkbox.checked;
+    
+    const categoryItems = this.fileChangesSummary[category] || [];
+    
+    categoryItems.forEach(item => {
+      if (category === 'deleted') {
+        if (isChecked) {
+          if (!this.filesToDelete.includes(item.path)) {
+            this.filesToDelete.push(item.path);
+          }
+        } else {
+          this.filesToDelete = this.filesToDelete.filter(p => p !== item.path);
+        }
+      } else {
+        if (isChecked) {
+          if (!this.filesToPush.some(file => file.path === item.path)) {
+            this.filesToPush.push(item.file);
+          }
+        } else {
+          this.filesToPush = this.filesToPush.filter(file => file.path !== item.path);
+        }
+      }
+    });
+    
+    // Re-render to update individual checkboxes
+    this.renderFileChangesSummary();
+  }
+
+  updateCategoryCheckboxState(status) {
+    const categoryCheckbox = document.querySelector(`[data-category="${status}"]`);
+    if (!categoryCheckbox) return;
+    
+    const categoryItems = this.fileChangesSummary[status] || [];
+    const selectedCount = categoryItems.filter(item => this.isFileSelected(item)).length;
+    
+    if (selectedCount === 0) {
+      categoryCheckbox.checked = false;
+      categoryCheckbox.removeAttribute('data-indeterminate');
+    } else if (selectedCount === categoryItems.length) {
+      categoryCheckbox.checked = true;
+      categoryCheckbox.removeAttribute('data-indeterminate');
+    } else {
+      categoryCheckbox.checked = false;
+      categoryCheckbox.setAttribute('data-indeterminate', 'true');
+    }
+  }
+
+  toggleCategory(categoryKey) {
+    const categorySection = document.querySelector(`[data-category="${categoryKey}"]`);
+    if (categorySection) {
+      categorySection.classList.toggle('expanded');
     }
   }
 
