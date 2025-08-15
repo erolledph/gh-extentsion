@@ -14,6 +14,10 @@ class ExtensionApp {
   async init() {
     console.log('Initializing GitHub Bridge Extension');
     
+    // Add debugging for initial state
+    console.log('Current screen on init:', this.currentScreen);
+    console.log('Auth screen element:', document.getElementById('auth-screen'));
+    
     // Set up event listeners
     this.setupEventListeners();
     
@@ -22,9 +26,33 @@ class ExtensionApp {
   }
 
   setupEventListeners() {
+    console.log('Setting up event listeners');
+    
     // Authentication
     document.getElementById('auth-button').addEventListener('click', () => this.authenticate());
     document.getElementById('manual-auth-button').addEventListener('click', () => this.authenticateWithManualToken());
+    
+    // Manual token toggle buttons
+    const showManualBtn = document.getElementById('show-manual-token-btn');
+    const backToOAuthBtn = document.getElementById('back-to-oauth-btn');
+    
+    if (showManualBtn) {
+      showManualBtn.addEventListener('click', () => {
+        console.log('Show manual token button clicked');
+        this.toggleManualTokenSection();
+      });
+    } else {
+      console.error('show-manual-token-btn not found');
+    }
+    
+    if (backToOAuthBtn) {
+      backToOAuthBtn.addEventListener('click', () => {
+        console.log('Back to OAuth button clicked');
+        this.toggleManualTokenSection();
+      });
+    } else {
+      console.error('back-to-oauth-btn not found');
+    }
     
     // Repository screen
     document.getElementById('repo-back-btn').addEventListener('click', () => this.showScreen('auth'));
@@ -57,9 +85,13 @@ class ExtensionApp {
   }
 
   async checkStoredToken() {
+    console.log('Checking stored token...');
     try {
       const response = await this.sendMessage({ action: 'getStoredToken' });
+      console.log('Stored token response:', response);
+      
       if (response.success && response.token) {
+        console.log('Found stored token, validating...');
         this.githubToken = response.token;
         
         // Validate the stored token
@@ -68,23 +100,73 @@ class ExtensionApp {
           token: this.githubToken 
         });
         
+        console.log('Token validation result:', validation);
+        
         if (validation.success && validation.validation.valid) {
+          console.log('Token is valid, proceeding to repo screen');
           this.showScreen('repo');
           this.loadRepositories();
         } else {
+          console.log('Token validation failed, showing auth screen');
+          this.showError('auth-error', 'GitHub Token Validation Failed or Token expired\n\nYour GitHub token could not be validated. This may happen if the token has expired, been revoked, or lost required permissions. Please logout and login again to refresh your authentication.');
           this.showScreen('auth');
         }
       } else {
+        console.log('No stored token found, showing auth screen');
         this.showScreen('auth');
       }
     } catch (error) {
       console.error('Error checking stored token:', error);
+      this.showError('auth-error', 'GitHub Token Validation Failed or Token expired\n\nYour GitHub token could not be validated. This may happen if the token has expired, been revoked, or lost required permissions. Please logout and login again to refresh your authentication.');
       this.showScreen('auth');
     }
   }
 
   async authenticate() {
     return this.authenticateWithOAuth();
+  }
+
+  toggleManualTokenSection() {
+    console.log('Toggling manual token section');
+    
+    const authOptions = document.getElementById('auth-options');
+    const manualTokenSection = document.querySelector('.manual-token-section');
+    const errorDiv = document.getElementById('auth-error');
+    
+    console.log('Auth options element:', authOptions);
+    console.log('Manual token section element:', manualTokenSection);
+    
+    if (!authOptions || !manualTokenSection) {
+      console.error('Required elements not found for toggle');
+      return;
+    }
+    
+    // Toggle visibility of both sections
+    authOptions.classList.toggle('hidden');
+    manualTokenSection.classList.toggle('hidden');
+    
+    console.log('Auth options hidden:', authOptions.classList.contains('hidden'));
+    console.log('Manual token section hidden:', manualTokenSection.classList.contains('hidden'));
+    
+    // Clear any existing errors
+    errorDiv.classList.add('hidden');
+    
+    // If showing manual token section, focus on the input
+    if (!manualTokenSection.classList.contains('hidden')) {
+      const tokenInput = document.getElementById('manual-token');
+      if (tokenInput) {
+        setTimeout(() => {
+          tokenInput.focus();
+          console.log('Focused on token input');
+        }, 100);
+      }
+    } else {
+      // Clear the token input when going back
+      const tokenInput = document.getElementById('manual-token');
+      if (tokenInput) {
+        tokenInput.value = '';
+      }
+    }
   }
 
   async authenticateWithOAuth() {
@@ -124,13 +206,19 @@ class ExtensionApp {
   }
 
   async authenticateWithManualToken() {
+    console.log('Starting manual token authentication');
+    
     const tokenInput = document.getElementById('manual-token');
     const authButton = document.getElementById('manual-auth-button');
     const errorDiv = document.getElementById('auth-error');
     
     const token = tokenInput.value.trim();
+    console.log('Token length:', token.length);
+    console.log('Token starts with ghp_:', token.startsWith('ghp_'));
+    console.log('Token starts with github_pat_:', token.startsWith('github_pat_'));
     
     if (!token) {
+      console.log('No token provided');
       errorDiv.textContent = 'Please enter a GitHub Personal Access Token';
       errorDiv.classList.remove('hidden');
       tokenInput.focus();
@@ -138,12 +226,14 @@ class ExtensionApp {
     }
     
     if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+      console.log('Invalid token format');
       errorDiv.textContent = 'Invalid token format. GitHub tokens should start with "ghp_" or "github_pat_"';
       errorDiv.classList.remove('hidden');
       tokenInput.focus();
       return;
     }
     
+    console.log('Validating token...');
     authButton.disabled = true;
     authButton.innerHTML = `
       <div class="spinner-small"></div>
@@ -157,7 +247,10 @@ class ExtensionApp {
         token: token 
       });
       
+      console.log('Manual token validation result:', validation);
+      
       if (validation.success && validation.validation.valid) {
+        console.log('Manual token is valid, storing and proceeding');
         // Store the token
         await this.sendMessage({ 
           action: 'storeToken', 
@@ -168,12 +261,13 @@ class ExtensionApp {
         this.showScreen('repo');
         this.loadRepositories();
       } else {
-        throw new Error('Invalid token or insufficient permissions. Make sure your token has "repo" scope.');
+        console.log('Manual token validation failed');
+        this.showError('auth-error', 'GitHub Token Validation Failed or Token expired\n\nYour GitHub token could not be validated. This may happen if the token has expired, been revoked, or lost required permissions. Please logout and login again to refresh your authentication.');
+        return;
       }
     } catch (error) {
       console.error('Manual authentication error:', error);
-      errorDiv.textContent = error.message;
-      errorDiv.classList.remove('hidden');
+      this.showError('auth-error', 'GitHub Token Validation Failed or Token expired\n\nYour GitHub token could not be validated. This may happen if the token has expired, been revoked, or lost required permissions. Please logout and login again to refresh your authentication.');
     } finally {
       authButton.disabled = false;
       authButton.innerHTML = `
@@ -1001,13 +1095,22 @@ class ExtensionApp {
   }
 
   showScreen(screenName) {
+    console.log('Showing screen:', screenName);
+    
     // Hide all screens
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.add('hidden');
     });
     
     // Show target screen
-    document.getElementById(`${screenName}-screen`).classList.remove('hidden');
+    const targetScreen = document.getElementById(`${screenName}-screen`);
+    if (targetScreen) {
+      targetScreen.classList.remove('hidden');
+      console.log('Successfully showed screen:', screenName);
+    } else {
+      console.error('Screen not found:', `${screenName}-screen`);
+    }
+    
     this.currentScreen = screenName;
     
     // Special handling for certain screens
@@ -1015,7 +1118,9 @@ class ExtensionApp {
       this.showCommitScreen();
     } else if (screenName === 'success') {
       const successMessage = document.getElementById('success-message');
-      successMessage.textContent = `Your project has been successfully uploaded to ${this.selectedRepository.full_name}`;
+      if (successMessage && this.selectedRepository) {
+        successMessage.textContent = `Your project has been successfully uploaded to ${this.selectedRepository.full_name}`;
+      }
     }
   }
 

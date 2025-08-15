@@ -324,8 +324,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   switch (request.action) {
     case 'authenticate':
+      console.log('Processing authenticate request');
       authenticateWithGitHub()
         .then(token => {
+          console.log('Authentication successful, token received');
           sendResponse({ success: true, token });
         })
         .catch(error => {
@@ -335,24 +337,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true; // Keep message channel open for async response
 
     case 'getStoredToken':
+      console.log('Processing getStoredToken request');
       chrome.storage.local.get(['github_token'], (result) => {
+        console.log('Retrieved stored token:', result.github_token ? 'Token found' : 'No token');
         sendResponse({ success: true, token: result.github_token || null });
       });
       return true;
 
     case 'storeToken':
+      console.log('Processing storeToken request');
       if (!request.token) {
+        console.log('No token provided for storage');
         sendResponse({ success: false, error: 'No token provided' });
         return;
       }
 
       chrome.storage.local.set({ github_token: request.token }, () => {
+        console.log('Token stored successfully');
         sendResponse({ success: true });
       });
       return true;
 
     case 'validateToken':
+      console.log('Processing validateToken request');
       if (!request.token) {
+        console.log('No token provided for validation');
         sendResponse({ success: false, error: 'No token provided' });
         return;
       }
@@ -360,9 +369,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const githubService = new GitHubService(request.token);
       githubService.validateToken()
         .then(validation => {
+          console.log('Token validation result:', validation);
           sendResponse({ success: true, validation });
         })
         .catch(error => {
+          console.error('Token validation error:', error);
           sendResponse({ success: false, error: error.message });
         });
       return true;

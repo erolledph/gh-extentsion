@@ -344,11 +344,18 @@ label {
   max-width: 280px;
 }
 
+/* Auth Options Container */
+.auth-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+
 /* Manual Token Authentication */
 .auth-divider {
   position: relative;
   text-align: center;
-  margin: var(--space-6) 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
@@ -378,7 +385,7 @@ label {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-8);
+  padding: var(--space-6);
   box-shadow: var(--shadow-sm);
 }
 
@@ -412,11 +419,20 @@ label {
 }
 
 .manual-token-section .form-group {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-5);
 }
 
-.manual-token-section .btn-secondary {
-  margin-top: var(--space-5);
+.token-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-top: var(--space-4);
+}
+
+.token-actions .btn-secondary,
+.token-actions .btn-primary {
+  flex: 1;
+  min-height: 44px;
 }
 
 /* Repository Screen */
@@ -1016,6 +1032,8 @@ label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   box-shadow: var(--shadow-sm);
+  white-space: pre-line;
+  line-height: var(--line-height-relaxed);
 }
 
 .warning-message {
