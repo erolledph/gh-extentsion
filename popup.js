@@ -306,9 +306,15 @@ class ExtensionApp {
       repoList.innerHTML = `
         <div class="error-state">
           <p>Failed to load repositories: ${error.message}</p>
-          <button onclick="app.loadRepositories()" class="btn-secondary">Try Again</button>
+          <button id="retry-load-repos" class="btn-secondary">Try Again</button>
         </div>
       `;
+      
+      // Attach event listener to retry button
+      const retryButton = document.getElementById('retry-load-repos');
+      if (retryButton) {
+        retryButton.addEventListener('click', () => this.loadRepositories());
+      }
     }
   }
 
@@ -858,7 +864,7 @@ class ExtensionApp {
     
     return `
       <div class="file-category-section" data-category="${key}">
-        <div class="file-category-header" onclick="app.toggleCategory('${key}')">
+        <div class="file-category-header" data-category-key="${key}">
           <span class="category-toggle-icon">${toggleIcon}</span>
           <span class="category-title">${items.length} ${label}</span>
         </div>
@@ -974,9 +980,8 @@ class ExtensionApp {
     const categoryHeaders = document.querySelectorAll('.file-category-header');
     categoryHeaders.forEach(header => {
       header.addEventListener('click', (event) => {
-        const categorySection = header.closest('.file-category-section');
-        if (categorySection) {
-          const categoryKey = categorySection.getAttribute('data-category');
+        const categoryKey = header.getAttribute('data-category-key');
+        if (categoryKey) {
           this.toggleCategory(categoryKey);
         }
       });
