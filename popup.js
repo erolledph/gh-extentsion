@@ -768,15 +768,14 @@ class ExtensionApp {
     const categorizedContent = categories.map(category => this.renderCategory(category)).join('');
     
     fileChangesList.innerHTML = stats + categorizedContent;
+    
+    // Attach event listeners after DOM elements are created
+    this.attachFileChangeListeners();
   }
 
   renderCategory(category) {
     const { key, label, items, icon } = category;
     const sortedItems = items.sort((a, b) => a.path.localeCompare(b.path));
-    
-    // Check if all items in this category are selected
-    const allSelected = sortedItems.every(item => this.isFileSelected(item));
-    const someSelected = sortedItems.some(item => this.isFileSelected(item));
     
     const toggleIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M9 18l6-6-6-6"/>
@@ -784,36 +783,24 @@ class ExtensionApp {
     
     const fileItems = sortedItems.map(item => {
       const isSelected = this.isFileSelected(item);
-      const statusIcon = this.getStatusIcon(item.status);
       
       return `
-        <div class="file-change-item status-${item.status}">
+        <div class="file-change-item">
           <input type="checkbox" 
                  ${isSelected ? 'checked' : ''} 
                  data-path="${item.path}" 
                  data-status="${item.status}"
                  onchange="app.handleFileSelectionChange(this)">
-          <div class="file-status-icon">${statusIcon}</div>
           <span class="file-path" title="${item.path}">${item.path}</span>
-          <span class="file-status">${item.status}</span>
         </div>
       `;
     }).join('');
     
     return `
-      <div class="file-category-section">
+      <div class="file-category-section" data-category="${key}">
         <div class="file-category-header" onclick="app.toggleCategory('${key}')">
-          <label class="category-checkbox-label">
-            <input type="checkbox" 
-                   class="category-checkbox"
-                   data-category="${key}"
-                   ${allSelected ? 'checked' : ''}
-                   ${someSelected && !allSelected ? 'data-indeterminate="true"' : ''}
-                   onchange="app.handleCategorySelectionChange(this)"
-                   onclick="event.stopPropagation()">
-            <span class="category-toggle-icon">${toggleIcon}</span>
-            <span class="category-title">${items.length} ${label}</span>
-          </label>
+          <span class="category-toggle-icon">${toggleIcon}</span>
+          <span class="category-title">${items.length} ${label}</span>
         </div>
         <div class="file-category-items">
           ${fileItems}
@@ -913,65 +900,35 @@ class ExtensionApp {
         this.filesToPush = this.filesToPush.filter(file => file.path !== path);
       }
     }
-    
-    // Update the category checkbox state
-    this.updateCategoryCheckboxState(status);
-  }
-
-  handleCategorySelectionChange(checkbox) {
-    const category = checkbox.dataset.category;
-    const isChecked = checkbox.checked;
-    
-    const categoryItems = this.fileChangesSummary[category] || [];
-    
-    categoryItems.forEach(item => {
-      if (category === 'deleted') {
-        if (isChecked) {
-          if (!this.filesToDelete.includes(item.path)) {
-            this.filesToDelete.push(item.path);
-          }
-        } else {
-          this.filesToDelete = this.filesToDelete.filter(p => p !== item.path);
-        }
-      } else {
-        if (isChecked) {
-          if (!this.filesToPush.some(file => file.path === item.path)) {
-            this.filesToPush.push(item.file);
-          }
-        } else {
-          this.filesToPush = this.filesToPush.filter(file => file.path !== item.path);
-        }
-      }
-    });
-    
-    // Re-render to update individual checkboxes
-    this.renderFileChangesSummary();
-  }
-
-  updateCategoryCheckboxState(status) {
-    const categoryCheckbox = document.querySelector(`[data-category="${status}"]`);
-    if (!categoryCheckbox) return;
-    
-    const categoryItems = this.fileChangesSummary[status] || [];
-    const selectedCount = categoryItems.filter(item => this.isFileSelected(item)).length;
-    
-    if (selectedCount === 0) {
-      categoryCheckbox.checked = false;
-      categoryCheckbox.removeAttribute('data-indeterminate');
-    } else if (selectedCount === categoryItems.length) {
-      categoryCheckbox.checked = true;
-      categoryCheckbox.removeAttribute('data-indeterminate');
-    } else {
-      categoryCheckbox.checked = false;
-      categoryCheckbox.setAttribute('data-indeterminate', 'true');
-    }
   }
 
   toggleCategory(categoryKey) {
-    const categorySection = document.querySelector(`[data-category="${categoryKey}"]`);
+    const categorySection = document.querySelector(`.file-category-section[data-category="${categoryKey}"]`);
     if (categorySection) {
       categorySection.classList.toggle('expanded');
     }
+  }
+
+  attachFileChangeListeners() {
+    // Attach click listeners to category headers
+    const categoryHeaders = document.querySelectorAll('.file-category-header');
+    categoryHeaders.forEach(header => {
+      header.addEventListener('click', (event) => {
+        const categorySection = header.closest('.file-category-section');
+        if (categorySection) {
+          const categoryKey = categorySection.getAttribute('data-category');
+          this.toggleCategory(categoryKey);
+        }
+      });
+    });
+    
+    // Attach change listeners to file checkboxes
+    const fileCheckboxes = document.querySelectorAll('.file-change-item input[type="checkbox"]');
+    fileCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', (event) => {
+        this.handleFileSelectionChange(event.target);
+      });
+    });
   }
 
   async loadBranches() {
